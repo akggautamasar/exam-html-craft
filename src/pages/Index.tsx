@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Plus, Trash2, Eye, FileText, Settings, HelpCircle, Upload, Palette, Timer, BookOpen } from 'lucide-react';
+import { Download, Plus, Trash2, Eye, FileText, Settings, HelpCircle, Upload, Palette, Timer, BookOpen, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Question {
@@ -55,6 +55,8 @@ const Index = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [showPreview, setShowPreview] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState('');
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -98,6 +100,81 @@ const Index = () => {
       questions: prev.questions.filter(q => q.id !== id)
     }));
     toast.success('Question deleted successfully');
+  };
+
+  const parseImportText = () => {
+    try {
+      const lines = importText.trim().split('\n').filter(line => line.trim());
+      const questions = [];
+      let currentQuestion = null;
+      let optionIndex = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Check if it's a question (starts with number followed by dot)
+        const questionMatch = line.match(/^\d+\.\s*(.+)/);
+        if (questionMatch) {
+          // Save previous question if exists
+          if (currentQuestion) {
+            questions.push(currentQuestion);
+          }
+          
+          // Start new question
+          currentQuestion = {
+            id: Date.now() + Math.random(),
+            text: questionMatch[1],
+            options: ['', '', '', ''],
+            correctAnswer: 0,
+            explanation: '',
+            solutionHeading: 'Explanation',
+            explanationImageUrl: ''
+          };
+          optionIndex = 0;
+          continue;
+        }
+
+        // Check if it's an option (starts with a), b), c), d))
+        const optionMatch = line.match(/^([a-d])\)\s*(.+)/);
+        if (optionMatch && currentQuestion) {
+          const optionLetter = optionMatch[1];
+          const optionText = optionMatch[2];
+          const optionIdx = optionLetter.charCodeAt(0) - 97; // a=0, b=1, c=2, d=3
+          
+          // Check if option is bold (correct answer)
+          const isBold = optionText.includes('**') || line.includes('<b>') || line.includes('<strong>');
+          const cleanText = optionText.replace(/\*\*/g, '').replace(/<\/?b>/g, '').replace(/<\/?strong>/g, '').trim();
+          
+          currentQuestion.options[optionIdx] = cleanText;
+          
+          if (isBold) {
+            currentQuestion.correctAnswer = optionIdx;
+          }
+        }
+      }
+
+      // Don't forget the last question
+      if (currentQuestion) {
+        questions.push(currentQuestion);
+      }
+
+      if (questions.length === 0) {
+        toast.error('No valid questions found. Please check the format.');
+        return;
+      }
+
+      // Add questions to exam data
+      setExamData(prev => ({
+        ...prev,
+        questions: [...prev.questions, ...questions]
+      }));
+
+      toast.success(`Successfully imported ${questions.length} questions!`);
+      setShowImportModal(false);
+      setImportText('');
+    } catch (error) {
+      toast.error('Error parsing questions. Please check the format.');
+    }
   };
 
   const generateHTML = () => {
@@ -1545,17 +1622,17 @@ const Index = () => {
 </body>
 </html>`;
 
-    const blob = new Blob([htmlTemplate], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${examData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_exam.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const blob = new Blob([htmlTemplate], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${examData.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_exam.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 
-    toast.success('Advanced HTML exam file generated and downloaded successfully!');
+  toast.success('Advanced HTML exam file generated and downloaded successfully!');
   };
 
   const renderStepContent = () => {
@@ -1734,20 +1811,36 @@ const Index = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-semibold">Questions ({examData.questions.length})</h3>
-              <Button onClick={addQuestion} className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
-                Add Question
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setShowImportModal(true)} 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <FileUp className="w-4 h-4" />
+                  Import Questions
+                </Button>
+                <Button onClick={addQuestion} className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add Question
+                </Button>
+              </div>
             </div>
             
             {examData.questions.length === 0 ? (
               <Card className="p-8 text-center">
                 <HelpCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground mb-4">No questions added yet</p>
-                <Button onClick={addQuestion} variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Question
-                </Button>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={() => setShowImportModal(true)} variant="outline">
+                    <FileUp className="w-4 h-4 mr-2" />
+                    Import Questions
+                  </Button>
+                  <Button onClick={addQuestion} variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Manual Question
+                  </Button>
+                </div>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -1942,6 +2035,75 @@ const Index = () => {
             Next
           </Button>
         </div>
+
+        {/* Import Questions Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="p-6 border-b flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Import Questions</h2>
+                <Button variant="outline" onClick={() => setShowImportModal(false)}>
+                  Close
+                </Button>
+              </div>
+              <div className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-lg font-medium">Question Format Example:</Label>
+                    <div className="mt-2 p-4 bg-gray-50 rounded-lg text-sm font-mono">
+                      <div>1. By the time we reached the station, the train ___.</div>
+                      <div>a) leave</div>
+                      <div><strong>b) had left</strong></div>
+                      <div>c) has left</div>
+                      <div>d) was leaving</div>
+                      <br />
+                      <div>2. She ___ in Delhi for five years before she moved to Mumbai.</div>
+                      <div>a) is living</div>
+                      <div><strong>b) had lived</strong></div>
+                      <div>c) lives</div>
+                      <div>d) has lived</div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label>Instructions:</Label>
+                    <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                      <li>• Start each question with a number followed by a dot (1., 2., etc.)</li>
+                      <li>• Use a), b), c), d) for options</li>
+                      <li>• Mark the correct answer by making it <strong>bold</strong> using **text** or &lt;b&gt;text&lt;/b&gt;</li>
+                      <li>• Leave a blank line between questions for better parsing</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="importTextarea">Paste Your Questions:</Label>
+                    <Textarea
+                      id="importTextarea"
+                      value={importText}
+                      onChange={(e) => setImportText(e.target.value)}
+                      placeholder="Paste your questions here..."
+                      rows={12}
+                      className="mt-2"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => setShowImportModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={parseImportText}
+                      disabled={!importText.trim()}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      Import Questions
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Preview Modal */}
         {showPreview && examData.title && (
