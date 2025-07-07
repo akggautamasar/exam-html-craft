@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,7 @@ interface Question {
   explanation: string;
   imageUrl?: string;
   solutionHeading?: string;
+  explanationImageUrl?: string;
 }
 
 interface ExamData {
@@ -63,7 +63,8 @@ const Index = () => {
       options: ['', '', '', ''],
       correctAnswer: 0,
       explanation: '',
-      solutionHeading: 'Explanation'
+      solutionHeading: 'Explanation',
+      explanationImageUrl: ''
     };
     setExamData(prev => ({
       ...prev,
@@ -114,7 +115,8 @@ const Index = () => {
       answer: (q.correctAnswer + 1).toString(),
       solution_heading: q.solutionHeading || 'Explanation',
       solution_text: q.explanation,
-      ...(q.imageUrl && { image: q.imageUrl })
+      ...(q.imageUrl && { image: q.imageUrl }),
+      ...(q.explanationImageUrl && { solution_image: q.explanationImageUrl })
     }));
 
     const htmlTemplate = `<!DOCTYPE html>
@@ -733,6 +735,15 @@ const Index = () => {
             font-weight: bold;
             margin-bottom: 10px;
             color: var(--primary-color);
+        }
+        
+        .solution-image {
+            max-width: 100%;
+            height: auto;
+            margin: 15px 0;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            cursor: pointer;
         }
         
         /* Modal Styles */
@@ -1479,6 +1490,8 @@ const Index = () => {
                     '<div class="review-solution">' +
                     '<div class="solution-heading">' + (question.solution_heading || 'Explanation') + '</div>' +
                     question.solution_text +
+                    (question.solution_image ? 
+                    '<img src="' + question.solution_image + '" alt="Solution Image" class="solution-image" onclick="zoomImage(\'' + question.solution_image + '\')">' : '') +
                     '</div>' : '');
                 
                 reviewContainer.appendChild(reviewQuestion);
@@ -1763,7 +1776,7 @@ const Index = () => {
                       </div>
 
                       <div>
-                        <Label>Image URL (optional)</Label>
+                        <Label>Question Image URL (optional)</Label>
                         <Input
                           value={question.imageUrl || ''}
                           onChange={(e) => updateQuestion(question.id, 'imageUrl', e.target.value)}
@@ -1800,6 +1813,14 @@ const Index = () => {
                             value={question.solutionHeading || ''}
                             onChange={(e) => updateQuestion(question.id, 'solutionHeading', e.target.value)}
                             placeholder="Explanation"
+                          />
+                        </div>
+                        <div>
+                          <Label>Explanation Image URL (optional)</Label>
+                          <Input
+                            value={question.explanationImageUrl || ''}
+                            onChange={(e) => updateQuestion(question.id, 'explanationImageUrl', e.target.value)}
+                            placeholder="https://example.com/explanation-image.jpg"
                           />
                         </div>
                       </div>
@@ -1995,6 +2016,11 @@ const Index = () => {
                               {question.solutionHeading || 'Explanation'}
                             </div>
                             <div className="text-sm mt-1">{question.explanation}</div>
+                            {question.explanationImageUrl && (
+                              <div className="mt-2 text-xs text-gray-600">
+                                📸 Explanation image included
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
