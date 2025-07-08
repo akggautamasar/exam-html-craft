@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,18 +84,18 @@ const Index = () => {
       return;
     }
 
-    const questionsHTML = examData.questions.map((q, index) => `
-        {
-            question: \`${q.text.replace(/`/g, '\\`')}\`,
-            options: [${q.options.map(opt => `\`${opt.replace(/`/g, '\\`')}\``).join(', ')}],
-            correct: ${q.correctAnswer},
-            explanation: \`${q.explanation.replace(/`/g, '\\`')}\`,
-            ${q.imageUrl ? `image: \`${q.imageUrl}\`,` : ''}
-            visited: false,
-            answered: false,
-            marked: false,
-            selectedOption: null
-        }`).join(',\n        ');
+    const questionsJSON = JSON.stringify(examData.questions.map((q, index) => ({
+      id: index + 1,
+      question: q.text,
+      options: q.options,
+      correct: q.correctAnswer,
+      explanation: q.explanation,
+      image: q.imageUrl || null,
+      visited: false,
+      answered: false,
+      marked: false,
+      selectedOption: null
+    })), null, 2);
 
     const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
@@ -149,7 +148,6 @@ const Index = () => {
             overflow-wrap: break-word;
         }
         
-        /* Header Styles */
         .app-header {
             text-align: center;
             padding: 20px;
@@ -194,14 +192,16 @@ const Index = () => {
             padding: 0 10px;
         }
         
-        /* Start Screen */
-        .start-screen {
-            max-width: 800px;
+        .start-screen, .exam-screen, .result-screen {
+            max-width: 1200px;
             margin: 30px auto;
             padding: 30px;
             background-color: white;
             border-radius: var(--border-radius);
             box-shadow: var(--box-shadow);
+        }
+        
+        .start-screen {
             text-align: center;
         }
         
@@ -241,9 +241,254 @@ const Index = () => {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-
-        /* Add all the remaining CSS from your template here */
-        /* ... (continuing with all the other styles from your template) ... */
+        
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background-color: var(--accent-color);
+        }
+        
+        .btn-success:hover {
+            background-color: #2d8f47;
+        }
+        
+        .btn-warning {
+            background-color: var(--warning-color);
+            color: var(--dark-text);
+        }
+        
+        .btn-warning:hover {
+            background-color: #e1a71a;
+        }
+        
+        .exam-screen {
+            display: none;
+        }
+        
+        .exam-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: var(--light-bg);
+            border-radius: var(--border-radius);
+        }
+        
+        .timer {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--danger-color);
+        }
+        
+        .question-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: var(--light-bg);
+            border-radius: var(--border-radius);
+        }
+        
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: var(--transition);
+        }
+        
+        .nav-btn:hover {
+            border-color: var(--primary-color);
+        }
+        
+        .nav-btn.current {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .nav-btn.answered {
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        
+        .nav-btn.marked {
+            background-color: var(--warning-color);
+            color: var(--dark-text);
+            border-color: var(--warning-color);
+        }
+        
+        .question-container {
+            margin-bottom: 30px;
+        }
+        
+        .question-text {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .question-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border-radius: var(--border-radius);
+        }
+        
+        .options {
+            margin-bottom: 30px;
+        }
+        
+        .option {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .option:hover {
+            border-color: var(--primary-color);
+            background-color: #f0f8ff;
+        }
+        
+        .option.selected {
+            border-color: var(--primary-color);
+            background-color: #e3f2fd;
+        }
+        
+        .option input[type="radio"] {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+        
+        .question-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+        }
+        
+        .result-screen {
+            display: none;
+            text-align: center;
+        }
+        
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .result-card {
+            padding: 20px;
+            border-radius: var(--border-radius);
+            background-color: var(--light-bg);
+        }
+        
+        .result-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .result-label {
+            color: var(--light-text);
+        }
+        
+        .pass {
+            color: var(--accent-color);
+        }
+        
+        .fail {
+            color: var(--danger-color);
+        }
+        
+        .review-section {
+            text-align: left;
+            margin-top: 30px;
+        }
+        
+        .review-question {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+        }
+        
+        .review-question.correct {
+            border-left: 5px solid var(--accent-color);
+        }
+        
+        .review-question.incorrect {
+            border-left: 5px solid var(--danger-color);
+        }
+        
+        .review-options {
+            margin: 15px 0;
+        }
+        
+        .review-option {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: var(--border-radius);
+        }
+        
+        .review-option.correct {
+            background-color: #e8f5e8;
+            border: 1px solid var(--accent-color);
+        }
+        
+        .review-option.selected {
+            background-color: #ffe8e8;
+            border: 1px solid var(--danger-color);
+        }
+        
+        .explanation {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: var(--border-radius);
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        @media (max-width: 768px) {
+            .start-screen, .exam-screen, .result-screen {
+                margin: 15px;
+                padding: 20px;
+            }
+            
+            .exam-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .question-nav {
+                justify-content: center;
+            }
+            
+            .question-controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -265,30 +510,327 @@ const Index = () => {
                 <strong>Passing Score:</strong> ${examData.passingScore}%
             </div>
             <div class="exam-info-item">
-                <strong>Instructions:</strong> ${examData.instructions}
+                <strong>Instructions:</strong> ${examData.instructions || 'Read each question carefully and select the best answer.'}
             </div>
         </div>
         <button class="btn" onclick="startExam()">Start Exam</button>
     </div>
 
-    <script>
-        const questions = [
-        ${questionsHTML}
-        ];
+    <div class="exam-screen" id="examScreen">
+        <div class="exam-header">
+            <div>
+                <span id="questionCounter">Question 1 of ${examData.questions.length}</span>
+            </div>
+            <div class="timer" id="timer">00:00:00</div>
+        </div>
+        
+        <div class="question-nav" id="questionNav"></div>
+        
+        <div class="question-container">
+            <div class="question-text" id="questionText"></div>
+            <div id="questionImage"></div>
+            <div class="options" id="optionsContainer"></div>
+        </div>
+        
+        <div class="question-controls">
+            <div>
+                <button class="btn" id="prevBtn" onclick="previousQuestion()" disabled>Previous</button>
+                <button class="btn" id="nextBtn" onclick="nextQuestion()">Next</button>
+            </div>
+            <div>
+                <button class="btn btn-warning" id="markBtn" onclick="toggleMark()">Mark for Review</button>
+                <button class="btn btn-success" onclick="submitExam()">Submit Exam</button>
+            </div>
+        </div>
+    </div>
 
+    <div class="result-screen" id="resultScreen">
+        <h2>Exam Results</h2>
+        <div class="result-summary" id="resultSummary"></div>
+        <div class="review-section" id="reviewSection"></div>
+        <button class="btn" onclick="restartExam()">Take Exam Again</button>
+    </div>
+
+    <script>
+        const questions = ${questionsJSON};
+        
         let currentQuestion = 0;
         let timeLeft = ${examData.duration * 60};
         let examStarted = false;
         let timerInterval;
+        let examSubmitted = false;
 
         function startExam() {
             document.getElementById('startScreen').style.display = 'none';
-            // Add exam functionality here
+            document.getElementById('examScreen').style.display = 'block';
             examStarted = true;
-            console.log('Exam started with', questions.length, 'questions');
+            
+            startTimer();
+            renderQuestionNav();
+            showQuestion(0);
         }
 
-        // Add all your exam functionality JavaScript here
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    autoSubmitExam();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const hours = Math.floor(timeLeft / 3600);
+            const minutes = Math.floor((timeLeft % 3600) / 60);
+            const seconds = timeLeft % 60;
+            
+            document.getElementById('timer').textContent = 
+                \`\${hours.toString().padStart(2, '0')}:\${minutes.toString().padStart(2, '0')}:\${seconds.toString().padStart(2, '0')}\`;
+        }
+
+        function renderQuestionNav() {
+            const nav = document.getElementById('questionNav');
+            nav.innerHTML = '';
+            
+            questions.forEach((q, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'nav-btn';
+                btn.textContent = index + 1;
+                btn.onclick = () => showQuestion(index);
+                
+                if (index === currentQuestion) btn.classList.add('current');
+                if (q.answered) btn.classList.add('answered');
+                if (q.marked) btn.classList.add('marked');
+                
+                nav.appendChild(btn);
+            });
+        }
+
+        function showQuestion(index) {
+            currentQuestion = index;
+            const question = questions[index];
+            question.visited = true;
+            
+            document.getElementById('questionCounter').textContent = \`Question \${index + 1} of \${questions.length}\`;
+            document.getElementById('questionText').textContent = question.question;
+            
+            // Handle image
+            const imageContainer = document.getElementById('questionImage');
+            if (question.image) {
+                imageContainer.innerHTML = \`<img src="\${question.image}" alt="Question image" class="question-image">\`;
+            } else {
+                imageContainer.innerHTML = '';
+            }
+            
+            // Render options
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+            
+            question.options.forEach((option, optIndex) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                if (question.selectedOption === optIndex) {
+                    optionDiv.classList.add('selected');
+                }
+                
+                optionDiv.onclick = () => selectOption(optIndex);
+                
+                optionDiv.innerHTML = \`
+                    <input type="radio" name="question\${index}" value="\${optIndex}" \${question.selectedOption === optIndex ? 'checked' : ''}>
+                    <span>\${String.fromCharCode(65 + optIndex)}. \${option}</span>
+                \`;
+                
+                optionsContainer.appendChild(optionDiv);
+            });
+            
+            // Update navigation buttons
+            document.getElementById('prevBtn').disabled = index === 0;
+            document.getElementById('nextBtn').textContent = index === questions.length - 1 ? 'Finish' : 'Next';
+            
+            // Update mark button
+            const markBtn = document.getElementById('markBtn');
+            markBtn.textContent = question.marked ? 'Unmark' : 'Mark for Review';
+            
+            renderQuestionNav();
+        }
+
+        function selectOption(optIndex) {
+            const question = questions[currentQuestion];
+            question.selectedOption = optIndex;
+            question.answered = true;
+            
+            // Update UI
+            document.querySelectorAll('.option').forEach((opt, index) => {
+                opt.classList.toggle('selected', index === optIndex);
+                opt.querySelector('input').checked = index === optIndex;
+            });
+            
+            renderQuestionNav();
+        }
+
+        function previousQuestion() {
+            if (currentQuestion > 0) {
+                showQuestion(currentQuestion - 1);
+            }
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < questions.length - 1) {
+                showQuestion(currentQuestion + 1);
+            } else {
+                submitExam();
+            }
+        }
+
+        function toggleMark() {
+            const question = questions[currentQuestion];
+            question.marked = !question.marked;
+            
+            const markBtn = document.getElementById('markBtn');
+            markBtn.textContent = question.marked ? 'Unmark' : 'Mark for Review';
+            
+            renderQuestionNav();
+        }
+
+        function submitExam() {
+            if (examSubmitted) return;
+            
+            const unanswered = questions.filter(q => !q.answered).length;
+            if (unanswered > 0) {
+                if (!confirm(\`You have \${unanswered} unanswered questions. Are you sure you want to submit?\`)) {
+                    return;
+                }
+            }
+            
+            examSubmitted = true;
+            clearInterval(timerInterval);
+            calculateResults();
+            showResults();
+        }
+
+        function autoSubmitExam() {
+            examSubmitted = true;
+            calculateResults();
+            showResults();
+            alert('Time is up! Your exam has been submitted automatically.');
+        }
+
+        function calculateResults() {
+            let correct = 0;
+            let attempted = 0;
+            
+            questions.forEach(question => {
+                if (question.answered) {
+                    attempted++;
+                    if (question.selectedOption === question.correct) {
+                        correct++;
+                    }
+                }
+            });
+            
+            const percentage = Math.round((correct / questions.length) * 100);
+            const passed = percentage >= ${examData.passingScore};
+            
+            window.examResults = {
+                totalQuestions: questions.length,
+                attempted,
+                correct,
+                incorrect: attempted - correct,
+                unanswered: questions.length - attempted,
+                percentage,
+                passed,
+                timeTaken: ${examData.duration * 60} - timeLeft
+            };
+        }
+
+        function showResults() {
+            document.getElementById('examScreen').style.display = 'none';
+            document.getElementById('resultScreen').style.display = 'block';
+            
+            const results = window.examResults;
+            const summary = document.getElementById('resultSummary');
+            
+            summary.innerHTML = \`
+                <div class="result-card">
+                    <div class="result-value \${results.passed ? 'pass' : 'fail'}">\${results.percentage}%</div>
+                    <div class="result-label">Score</div>
+                </div>
+                <div class="result-card">
+                    <div class="result-value">\${results.correct}</div>
+                    <div class="result-label">Correct</div>
+                </div>
+                <div class="result-card">
+                    <div class="result-value">\${results.incorrect}</div>
+                    <div class="result-label">Incorrect</div>
+                </div>
+                <div class="result-card">
+                    <div class="result-value">\${results.unanswered}</div>
+                    <div class="result-label">Unanswered</div>
+                </div>
+                <div class="result-card">
+                    <div class="result-value \${results.passed ? 'pass' : 'fail'}">\${results.passed ? 'PASS' : 'FAIL'}</div>
+                    <div class="result-label">Result</div>
+                </div>
+            \`;
+            
+            // Show detailed review
+            showDetailedReview();
+        }
+
+        function showDetailedReview() {
+            const reviewSection = document.getElementById('reviewSection');
+            reviewSection.innerHTML = '<h3>Detailed Review</h3>';
+            
+            questions.forEach((question, index) => {
+                const isCorrect = question.selectedOption === question.correct;
+                const reviewDiv = document.createElement('div');
+                reviewDiv.className = \`review-question \${isCorrect ? 'correct' : 'incorrect'}\`;
+                
+                let selectedText = question.answered ? question.options[question.selectedOption] : 'Not answered';
+                let correctText = question.options[question.correct];
+                
+                reviewDiv.innerHTML = \`
+                    <div><strong>Q\${index + 1}:</strong> \${question.question}</div>
+                    <div class="review-options">
+                        <div class="review-option \${question.answered ? 'selected' : ''}">
+                            <strong>Your Answer:</strong> \${selectedText}
+                        </div>
+                        <div class="review-option correct">
+                            <strong>Correct Answer:</strong> \${correctText}
+                        </div>
+                    </div>
+                    \${question.explanation ? \`<div class="explanation"><strong>Explanation:</strong> \${question.explanation}</div>\` : ''}
+                \`;
+                
+                reviewSection.appendChild(reviewDiv);
+            });
+        }
+
+        function restartExam() {
+            // Reset all question states
+            questions.forEach(question => {
+                question.visited = false;
+                question.answered = false;
+                question.marked = false;
+                question.selectedOption = null;
+            });
+            
+            // Reset variables
+            currentQuestion = 0;
+            timeLeft = ${examData.duration * 60};
+            examStarted = false;
+            examSubmitted = false;
+            
+            // Show start screen
+            document.getElementById('resultScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+        }
+
+        // Initialize timer display
+        updateTimerDisplay();
     </script>
 </body>
 </html>`;
