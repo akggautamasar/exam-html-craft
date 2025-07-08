@@ -47,7 +47,11 @@ import {
   GraduationCap,
   Medal,
   Crown,
-  Sparkles
+  Sparkles,
+  Save,
+  X,
+  Copy,
+  Import
 } from 'lucide-react';
 
 interface Question {
@@ -119,6 +123,9 @@ const Index = () => {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [showCreateExam, setShowCreateExam] = useState(false);
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
   const [newExam, setNewExam] = useState<Partial<Exam>>({
     title: '',
     description: '',
@@ -137,6 +144,7 @@ const Index = () => {
     category: '',
     points: 1
   });
+  const [bulkQuestions, setBulkQuestions] = useState('');
 
   // Sample data initialization
   useEffect(() => {
@@ -337,6 +345,551 @@ const Index = () => {
   });
 
   const categories = [...new Set(exams.map(exam => exam.category))];
+
+  // Question management functions
+  const addQuestion = () => {
+    if (!newQuestion.question || !newQuestion.options?.every(opt => opt.trim())) {
+      toast.error('Please fill in all question fields');
+      return;
+    }
+
+    const question: Question = {
+      id: Date.now().toString(),
+      question: newQuestion.question!,
+      options: newQuestion.options!,
+      correctAnswer: newQuestion.correctAnswer!,
+      explanation: newQuestion.explanation || '',
+      difficulty: newQuestion.difficulty!,
+      category: newQuestion.category || newExam.category || '',
+      points: newQuestion.points || 1
+    };
+
+    setNewExam(prev => ({
+      ...prev,
+      questions: [...(prev.questions || []), question]
+    }));
+
+    // Reset form
+    setNewQuestion({
+      question: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      explanation: '',
+      difficulty: 'medium',
+      category: '',
+      points: 1
+    });
+
+    setShowAddQuestion(false);
+    toast.success('Question added successfully!');
+  };
+
+  const editQuestion = (index: number) => {
+    const question = newExam.questions![index];
+    setNewQuestion(question);
+    setEditingQuestionIndex(index);
+    setShowAddQuestion(true);
+  };
+
+  const updateQuestion = () => {
+    if (editingQuestionIndex === null) return;
+
+    const updatedQuestions = [...(newExam.questions || [])];
+    updatedQuestions[editingQuestionIndex] = {
+      ...newQuestion,
+      id: updatedQuestions[editingQuestionIndex].id
+    } as Question;
+
+    setNewExam(prev => ({
+      ...prev,
+      questions: updatedQuestions
+    }));
+
+    setEditingQuestionIndex(null);
+    setNewQuestion({
+      question: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      explanation: '',
+      difficulty: 'medium',
+      category: '',
+      points: 1
+    });
+    setShowAddQuestion(false);
+    toast.success('Question updated successfully!');
+  };
+
+  const deleteQuestion = (index: number) => {
+    const updatedQuestions = newExam.questions?.filter((_, i) => i !== index) || [];
+    setNewExam(prev => ({
+      ...prev,
+      questions: updatedQuestions
+    }));
+    toast.success('Question deleted successfully!');
+  };
+
+  const processBulkQuestions = () => {
+    try {
+      const lines = bulkQuestions.trim().split('\n');
+      const questions: Question[] = [];
+      
+      for (let i = 0; i < lines.length; i += 7) {
+        if (i + 5 >= lines.length) break;
+        
+        const question = lines[i].replace(/^\d+\.\s*/, '').trim();
+        const options = [
+          lines[i + 1].replace(/^[a-d]\)\s*/i, '').trim(),
+          lines[i + 2].replace(/^[a-d]\)\s*/i, '').trim(),
+          lines[i + 3].replace(/^[a-d]\)\s*/i, '').trim(),
+          lines[i + 4].replace(/^[a-d]\)\s*/i, '').trim()
+        ];
+        const correctAnswerLetter = lines[i + 5].replace(/^Answer:\s*/i, '').trim().toLowerCase();
+        const correctAnswer = ['a', 'b', 'c', 'd'].indexOf(correctAnswerLetter);
+        const explanation = lines[i + 6] ? lines[i + 6].replace(/^Explanation:\s*/i, '').trim() : '';
+
+        if (question && options.every(opt => opt) && correctAnswer !== -1) {
+          questions.push({
+            id: Date.now().toString() + i,
+            question,
+            options,
+            correctAnswer,
+            explanation,
+            difficulty: 'medium',
+            category: newExam.category || '',
+            points: 1
+          });
+        }
+      }
+
+      if (questions.length > 0) {
+        setNewExam(prev => ({
+          ...prev,
+          questions: [...(prev.questions || []), ...questions]
+        }));
+        setBulkQuestions('');
+        setShowBulkImport(false);
+        toast.success(`${questions.length} questions imported successfully!`);
+      } else {
+        toast.error('No valid questions found. Please check the format.');
+      }
+    } catch (error) {
+      toast.error('Error processing questions. Please check the format.');
+    }
+  };
+
+  const saveExam = () => {
+    if (!newExam.title || !newExam.description || !newExam.category || !newExam.questions?.length) {
+      toast.error('Please fill in all required fields and add at least one question');
+      return;
+    }
+
+    const exam: Exam = {
+      id: Date.now().toString(),
+      title: newExam.title!,
+      description: newExam.description!,
+      questions: newExam.questions!,
+      timeLimit: newExam.timeLimit!,
+      category: newExam.category!,
+      difficulty: newExam.difficulty!,
+      passingScore: newExam.passingScore!,
+      createdAt: new Date(),
+      attempts: 0,
+      averageScore: 0
+    };
+
+    setExams(prev => [...prev, exam]);
+    
+    // Reset form
+    setNewExam({
+      title: '',
+      description: '',
+      questions: [],
+      timeLimit: 30,
+      category: '',
+      difficulty: 'medium',
+      passingScore: 70
+    });
+
+    setShowCreateExam(false);
+    toast.success('Exam created successfully!');
+  };
+
+  const generateHTMLTest = (exam: Exam) => {
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${exam.title}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .exam-info {
+            display: flex;
+            justify-content: space-around;
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .info-item {
+            text-align: center;
+        }
+        
+        .info-item .label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .info-item .value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .question {
+            margin-bottom: 30px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .question:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+        }
+        
+        .question-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .question-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        
+        .question-text {
+            font-size: 1.1em;
+            font-weight: 500;
+            color: #2c3e50;
+            line-height: 1.6;
+            flex: 1;
+        }
+        
+        .difficulty {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .difficulty.easy {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .difficulty.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .difficulty.hard {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .options {
+            margin-top: 20px;
+        }
+        
+        .option {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+        
+        .option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .option input[type="radio"] {
+            margin-right: 15px;
+            transform: scale(1.2);
+        }
+        
+        .option label {
+            cursor: pointer;
+            font-size: 1em;
+            color: #495057;
+            flex: 1;
+        }
+        
+        .submit-section {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .timer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .exam-info {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .question-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .timer {
+                position: static;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer" id="timer">Time: ${exam.timeLimit}:00</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>${exam.title}</h1>
+            <p>${exam.description}</p>
+        </div>
+        
+        <div class="exam-info">
+            <div class="info-item">
+                <div class="label">Questions</div>
+                <div class="value">${exam.questions.length}</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Time Limit</div>
+                <div class="value">${exam.timeLimit} min</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Passing Score</div>
+                <div class="value">${exam.passingScore}%</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Difficulty</div>
+                <div class="value">${exam.difficulty}</div>
+            </div>
+        </div>
+        
+        <form class="content" id="examForm">
+            ${exam.questions.map((question, index) => `
+                <div class="question">
+                    <div class="question-header">
+                        <div style="display: flex; align-items: center; flex: 1;">
+                            <div class="question-number">${index + 1}</div>
+                            <div class="question-text">${question.question}</div>
+                        </div>
+                        <div class="difficulty ${question.difficulty}">${question.difficulty}</div>
+                    </div>
+                    <div class="options">
+                        ${question.options.map((option, optIndex) => `
+                            <div class="option">
+                                <input type="radio" id="q${index}_${optIndex}" name="question_${index}" value="${optIndex}">
+                                <label for="q${index}_${optIndex}">${option}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('')}
+            
+            <div class="submit-section">
+                <button type="submit" class="submit-btn">Submit Exam</button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // Timer functionality
+        let timeLeft = ${exam.timeLimit * 60};
+        const timerElement = document.getElementById('timer');
+        
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            timerElement.textContent = \`Time: \${minutes.toString().padStart(2, '0')}:\${seconds.toString().padStart(2, '0')}\`;
+            
+            if (timeLeft <= 0) {
+                submitExam();
+                return;
+            }
+            
+            if (timeLeft <= 300) { // 5 minutes
+                timerElement.style.color = '#dc3545';
+                timerElement.style.animation = 'pulse 1s infinite';
+            }
+            
+            timeLeft--;
+        }
+        
+        setInterval(updateTimer, 1000);
+        
+        // Form submission
+        document.getElementById('examForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitExam();
+        });
+        
+        function submitExam() {
+            const formData = new FormData(document.getElementById('examForm'));
+            const answers = {};
+            let score = 0;
+            const totalQuestions = ${exam.questions.length};
+            
+            // Collect answers
+            for (let i = 0; i < totalQuestions; i++) {
+                const answer = formData.get(\`question_\${i}\`);
+                if (answer !== null) {
+                    answers[i] = parseInt(answer);
+                }
+            }
+            
+            // Calculate score
+            const correctAnswers = ${JSON.stringify(exam.questions.map(q => q.correctAnswer))};
+            for (let i = 0; i < totalQuestions; i++) {
+                if (answers[i] === correctAnswers[i]) {
+                    score++;
+                }
+            }
+            
+            const percentage = Math.round((score / totalQuestions) * 100);
+            const passed = percentage >= ${exam.passingScore};
+            
+            // Show results
+            alert(\`Exam completed!\\n\\nScore: \${percentage}%\\nCorrect: \${score}/\${totalQuestions}\\nResult: \${passed ? 'PASSED' : 'FAILED'}\`);
+        }
+        
+        // Add pulse animation for timer
+        const style = document.createElement('style');
+        style.textContent = \`
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+        \`;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${exam.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_test.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('HTML test file downloaded!');
+  };
 
   if (isExamActive && currentExam) {
     const currentQuestion = currentExam.questions[currentQuestionIndex];
@@ -708,13 +1261,22 @@ const Index = () => {
                     <Separator />
                     <div className="flex items-center justify-between">
                       <Badge variant="outline">{exam.category}</Badge>
-                      <Button 
-                        onClick={() => startExam(exam)}
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
-                      >
-                        <Play className="w-4 h-4 mr-2" />
-                        Start Exam
-                      </Button>
+                      <div className="flex space-x-2">
+                        <Button 
+                          onClick={() => generateHTMLTest(exam)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          onClick={() => startExam(exam)}
+                          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Start
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -858,7 +1420,7 @@ const Index = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="title">Exam Title</Label>
+                      <Label htmlFor="title">Exam Title *</Label>
                       <Input
                         id="title"
                         placeholder="Enter exam title..."
@@ -867,7 +1429,7 @@ const Index = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="description">Description *</Label>
                       <Textarea
                         id="description"
                         placeholder="Enter exam description..."
@@ -876,7 +1438,7 @@ const Index = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="category">Category</Label>
+                      <Label htmlFor="category">Category *</Label>
                       <Input
                         id="category"
                         placeholder="Enter category..."
@@ -923,29 +1485,274 @@ const Index = () => {
                 <Separator />
                 
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center space-x-2">
-                    <Lightbulb className="w-5 h-5" />
-                    <span>Questions</span>
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold flex items-center space-x-2">
+                      <Lightbulb className="w-5 h-5" />
+                      <span>Questions ({newExam.questions?.length || 0})</span>
+                    </h3>
+                    <div className="flex space-x-2">
+                      <Button onClick={() => setShowBulkImport(true)} variant="outline">
+                        <Import className="w-4 h-4 mr-2" />
+                        Bulk Import
+                      </Button>
+                      <Button onClick={() => setShowAddQuestion(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Question
+                      </Button>
+                    </div>
+                  </div>
                   
-                  <Card className="bg-gray-50 border-dashed">
-                    <CardContent className="p-6">
-                      <div className="text-center space-y-4">
-                        <div className="bg-white p-8 rounded-xl border-2 border-dashed border-gray-300">
-                          <Plus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600 mb-4">No questions added yet</p>
-                          <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
-                            Add First Question
-                          </Button>
+                  {newExam.questions && newExam.questions.length > 0 ? (
+                    <div className="space-y-4">
+                      {newExam.questions.map((question, index) => (
+                        <Card key={index} className="border-2 border-gray-200">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <Badge variant="outline">Q{index + 1}</Badge>
+                                  <Badge className={getDifficultyColor(question.difficulty)}>
+                                    {question.difficulty}
+                                  </Badge>
+                                  <Badge variant="secondary">{question.points} pts</Badge>
+                                </div>
+                                <p className="font-medium text-gray-900">{question.question}</p>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button onClick={() => editQuestion(index)} variant="outline" size="sm">
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button onClick={() => deleteQuestion(index)} variant="destructive" size="sm">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              {question.options.map((option, optIndex) => (
+                                <div key={optIndex} className={`p-2 rounded border ${
+                                  optIndex === question.correctAnswer ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                                }`}>
+                                  {String.fromCharCode(65 + optIndex)}. {option}
+                                  {optIndex === question.correctAnswer && (
+                                    <CheckCircle className="w-4 h-4 text-green-600 inline ml-2" />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card className="bg-gray-50 border-dashed">
+                      <CardContent className="p-6">
+                        <div className="text-center space-y-4">
+                          <div className="bg-white p-8 rounded-xl border-2 border-dashed border-gray-300">
+                            <Plus className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-600 mb-4">No questions added yet</p>
+                            <div className="flex justify-center space-x-4">
+                              <Button onClick={() => setShowAddQuestion(true)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                                Add First Question
+                              </Button>
+                              <Button onClick={() => setShowBulkImport(true)} variant="outline">
+                                Bulk Import
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
+
+                {newExam.questions && newExam.questions.length > 0 && (
+                  <div className="flex justify-end space-x-4 pt-6 border-t">
+                    <Button onClick={() => setNewExam({
+                      title: '',
+                      description: '',
+                      questions: [],
+                      timeLimit: 30,
+                      category: '',
+                      difficulty: 'medium',
+                      passingScore: 70
+                    })} variant="outline">
+                      Reset
+                    </Button>
+                    <Button onClick={saveExam} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700">
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Exam
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Add Question Dialog */}
+        <Dialog open={showAddQuestion} onOpenChange={setShowAddQuestion}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingQuestionIndex !== null ? 'Edit Question' : 'Add New Question'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="question">Question *</Label>
+                <Textarea
+                  id="question"
+                  placeholder="Enter your question..."
+                  value={newQuestion.question}
+                  onChange={(e) => setNewQuestion(prev => ({ ...prev, question: e.target.value }))}
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <Label>Answer Options *</Label>
+                {newQuestion.options?.map((option, index) => (
+                  <div key={index} className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="correctAnswer"
+                        checked={newQuestion.correctAnswer === index}
+                        onChange={() => setNewQuestion(prev => ({ ...prev, correctAnswer: index }))}
+                      />
+                      <Label className="text-sm font-medium">
+                        {String.fromCharCode(65 + index)}
+                      </Label>
+                    </div>
+                    <Input
+                      placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                      value={option}
+                      onChange={(e) => {
+                        const newOptions = [...(newQuestion.options || [])];
+                        newOptions[index] = e.target.value;
+                        setNewQuestion(prev => ({ ...prev, options: newOptions }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="questionDifficulty">Difficulty</Label>
+                  <Select value={newQuestion.difficulty} onValueChange={(value: 'easy' | 'medium' | 'hard') => setNewQuestion(prev => ({ ...prev, difficulty: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="points">Points</Label>
+                  <Input
+                    id="points"
+                    type="number"
+                    min="1"
+                    value={newQuestion.points}
+                    onChange={(e) => setNewQuestion(prev => ({ ...prev, points: parseInt(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="explanation">Explanation (Optional)</Label>
+                <Textarea
+                  id="explanation"
+                  placeholder="Explain the correct answer..."
+                  value={newQuestion.explanation}
+                  onChange={(e) => setNewQuestion(prev => ({ ...prev, explanation: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-4">
+                <Button onClick={() => {
+                  setShowAddQuestion(false);
+                  setEditingQuestionIndex(null);
+                  setNewQuestion({
+                    question: '',
+                    options: ['', '', '', ''],
+                    correctAnswer: 0,
+                    explanation: '',
+                    difficulty: 'medium',
+                    category: '',
+                    points: 1
+                  });
+                }} variant="outline">
+                  Cancel
+                </Button>
+                <Button onClick={editingQuestionIndex !== null ? updateQuestion : addQuestion}>
+                  {editingQuestionIndex !== null ? 'Update Question' : 'Add Question'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Import Dialog */}
+        <Dialog open={showBulkImport} onOpenChange={setShowBulkImport}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Bulk Import Questions</DialogTitle>
+              <DialogDescription>
+                Import multiple questions at once using the format below. Each question should be separated by a blank line.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg border">
+                <h4 className="font-medium mb-2">Format Example:</h4>
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+{`1. What is the capital of France?
+a) London
+b) Berlin
+c) Paris
+d) Madrid
+Answer: c
+Explanation: Paris is the capital and largest city of France.
+
+2. Which programming language is known for web development?
+a) Python
+b) JavaScript
+c) C++
+d) Java
+Answer: b
+Explanation: JavaScript is primarily used for web development.`}
+                </pre>
+              </div>
+              
+              <div>
+                <Label htmlFor="bulkQuestions">Paste Questions Here</Label>
+                <Textarea
+                  id="bulkQuestions"
+                  placeholder="Paste your questions in the format shown above..."
+                  value={bulkQuestions}
+                  onChange={(e) => setBulkQuestions(e.target.value)}
+                  className="min-h-[300px]"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <Button onClick={() => {
+                  setShowBulkImport(false);
+                  setBulkQuestions('');
+                }} variant="outline">
+                  Cancel
+                </Button>
+                <Button onClick={processBulkQuestions} disabled={!bulkQuestions.trim()}>
+                  <Import className="w-4 h-4 mr-2" />
+                  Import Questions
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Results Dialog */}
         <Dialog open={showResults} onOpenChange={setShowResults}>
