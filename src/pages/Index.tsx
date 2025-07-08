@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Plus, Trash2, Eye, FileText, Settings, HelpCircle, Upload, Palette, Timer, BookOpen } from 'lucide-react';
+import { Download, Plus, Trash2, Eye, FileText, Settings, HelpCircle, Upload, Palette, Timer, BookOpen, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Question {
@@ -55,6 +54,8 @@ const Index = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [showPreview, setShowPreview] = useState(false);
+  const [bulkQuestions, setBulkQuestions] = useState('');
+  const [showBulkImport, setShowBulkImport] = useState(false);
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -97,6 +98,80 @@ const Index = () => {
       questions: prev.questions.filter(q => q.id !== id)
     }));
     toast.success('Question deleted successfully');
+  };
+
+  const parseBulkQuestions = () => {
+    if (!bulkQuestions.trim()) {
+      toast.error('Please enter questions to import');
+      return;
+    }
+
+    try {
+      const questions = bulkQuestions.split('---').map(questionBlock => {
+        const lines = questionBlock.trim().split('\n').filter(line => line.trim());
+        if (lines.length < 5) return null; // Skip incomplete questions
+
+        // Find question text (usually line with number and text)
+        const questionLine = lines.find(line => /^\d+\./.test(line.trim()));
+        if (!questionLine) return null;
+
+        const questionText = questionLine.replace(/^\d+\.\s*/, '').trim();
+        
+        // Find options (lines starting with a), b), c), d))
+        const options = ['', '', '', ''];
+        let correctAnswer = 0;
+        
+        lines.forEach(line => {
+          const trimmed = line.trim();
+          if (/^a\)\s*/.test(trimmed)) {
+            options[0] = trimmed.replace(/^a\)\s*/, '');
+          } else if (/^b\)\s*/.test(trimmed)) {
+            options[1] = trimmed.replace(/^b\)\s*/, '');
+          } else if (/^c\)\s*/.test(trimmed)) {
+            options[2] = trimmed.replace(/^c\)\s*/, '');
+          } else if (/^d\)\s*/.test(trimmed)) {
+            options[3] = trimmed.replace(/^d\)\s*/, '');
+          }
+        });
+
+        // Find explanation
+        const explanationLine = lines.find(line => line.includes('👉') || line.toLowerCase().includes('explanation'));
+        const explanation = explanationLine ? 
+          explanationLine.replace(/👉\s*[Ee]xplanation:\s*/, '').trim() : '';
+
+        // Determine correct answer (look for bold text or first non-empty option)
+        const originalText = questionBlock;
+        if (originalText.includes('**a)') || originalText.includes('*a)')) correctAnswer = 0;
+        else if (originalText.includes('**b)') || originalText.includes('*b)')) correctAnswer = 1;
+        else if (originalText.includes('**c)') || originalText.includes('*c)')) correctAnswer = 2;
+        else if (originalText.includes('**d)') || originalText.includes('*d)')) correctAnswer = 3;
+
+        return {
+          id: Date.now() + Math.random(),
+          text: questionText,
+          options: options,
+          correctAnswer: correctAnswer,
+          explanation: explanation,
+          solutionHeading: 'Explanation'
+        };
+      }).filter(Boolean);
+
+      if (questions.length === 0) {
+        toast.error('No valid questions found. Please check the format.');
+        return;
+      }
+
+      setExamData(prev => ({
+        ...prev,
+        questions: [...prev.questions, ...questions]
+      }));
+
+      setBulkQuestions('');
+      setShowBulkImport(false);
+      toast.success(`${questions.length} questions imported successfully!`);
+    } catch (error) {
+      toast.error('Error parsing questions. Please check the format.');
+    }
   };
 
   const generateHTML = () => {
@@ -1224,7 +1299,7 @@ const Index = () => {
             }
             
             const hours = Math.floor(timeLeftMs / (1000 * 60 * 60));
-            const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60));
+            const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60);
             const seconds = Math.floor((timeLeftMs % (1000 * 60)) / 1000);
             
             const formattedTime = 
@@ -1721,20 +1796,78 @@ const Index = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-semibold">Questions ({examData.questions.length})</h3>
-              <Button onClick={addQuestion} className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
-                Add Question
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setShowBulkImport(!showBulkImport)} 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <FileUp className="w-4 h-4" />
+                  Bulk Import
+                </Button>
+                <Button onClick={addQuestion} className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add Question
+                </Button>
+              </div>
             </div>
+
+            {showBulkImport && (
+              <Card className="p-4 bg-blue-50 border-blue-200">
+                <div className="space-y-4">
+                  <div>
+                    <Label>Bulk Import Questions</Label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Paste questions in this format. Separate questions with "---". Bold the correct answer or it will default to option A.
+                    </p>
+                    <Textarea
+                      value={bulkQuestions}
+                      onChange={(e) => setBulkQuestions(e.target.value)}
+                      placeholder={`1. By the time we reached the station, the train ___.
+a) leave
+**b) had left**
+c) has left
+d) was leaving
+👉 Explanation: Past perfect is used for actions completed before another past action.
+
+---
+
+2. She ___ in Delhi for five years before she moved to Mumbai.
+a) is living
+**b) had lived**
+c) lives
+d) has lived
+👉 Explanation: Past perfect shows the earlier past action.`}
+                      rows={10}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={parseBulkQuestions} className="bg-blue-600 hover:bg-blue-700">
+                      Import Questions
+                    </Button>
+                    <Button onClick={() => setShowBulkImport(false)} variant="outline">
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
             
             {examData.questions.length === 0 ? (
               <Card className="p-8 text-center">
                 <HelpCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground mb-4">No questions added yet</p>
-                <Button onClick={addQuestion} variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Question
-                </Button>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={addQuestion} variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Question
+                  </Button>
+                  <Button onClick={() => setShowBulkImport(true)} variant="outline">
+                    <FileUp className="w-4 h-4 mr-2" />
+                    Bulk Import
+                  </Button>
+                </div>
               </Card>
             ) : (
               <div className="space-y-4">
